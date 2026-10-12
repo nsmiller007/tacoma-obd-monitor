@@ -1,0 +1,1752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toyota Tacoma 2019 2TR-FE • Live Monitor</title>
+<style>
+  :root {
+    /* Classic 1980s TRD tri-color: yellow · orange · red on black */
+    --bg: #0b0b0b;
+    --panel: #141210;
+    --border: #3a2a18;
+    --text: #fff8e8;
+    --dim: #b8a070;
+    --accent: #ff6a00;
+    --trd-red: #e10600;
+    --trd-red-bright: #ff1a00;
+    --trd-orange: #ff6a00;
+    --trd-yellow: #ffcc00;
+    --silver: #e8dcc0;
+    --green: #22c55e;
+    --yellow: #ffcc00;
+    --red: #e10600;
+    --cyan: #ffcc00;
+    --magenta: #ff6a00;
+    --orange: #ff6a00;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background:
+      radial-gradient(ellipse at 50% -10%, #2a1808 0%, var(--bg) 55%),
+      repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent 48px,
+        rgba(255,106,0,0.035) 48px,
+        rgba(255,106,0,0.035) 49px
+      );
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    padding: 14px;
+    line-height: 1.4;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 18px;
+    background: linear-gradient(90deg, #100c08 0%, #1c140c 50%, #100c08 100%);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 12px;
+    margin-bottom: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* 80s TRD tri-stripe across the top */
+  header::before {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 5px;
+    background: linear-gradient(
+      90deg,
+      var(--trd-red) 0%,
+      var(--trd-red) 33%,
+      var(--trd-orange) 33%,
+      var(--trd-orange) 66%,
+      var(--trd-yellow) 66%,
+      var(--trd-yellow) 100%
+    );
+  }
+
+  header::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--trd-red), var(--trd-orange), var(--trd-yellow));
+    opacity: 0.5;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .toyota-mark {
+    width: 42px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+
+  .title-block { display: flex; flex-direction: column; gap: 2px; }
+  .title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: #fff;
+  }
+  .title span { color: var(--trd-orange); }
+  .subtitle {
+    font-size: 0.72rem;
+    color: var(--trd-yellow);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .status {
+    display: flex;
+    gap: 16px;
+    font-size: 0.85rem;
+    color: var(--dim);
+    align-items: center;
+  }
+
+  .status .demo {
+    color: var(--trd-orange);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+
+  .view-toggle {
+    display: flex;
+    gap: 4px;
+    background: #0a0806;
+    border-radius: 8px;
+    padding: 3px;
+    border: 1px solid var(--border);
+  }
+
+  .view-toggle button {
+    padding: 6px 14px;
+    border: none;
+    background: transparent;
+    color: var(--dim);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  .view-toggle button.active {
+    background: linear-gradient(90deg, var(--trd-red), var(--trd-orange));
+    color: #fff;
+  }
+
+  /* ========== CLUSTER VIEW ========== */
+  #view-cluster { display: block; }
+  #view-metrics { display: none; }
+
+  .cluster {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+
+  @media (max-width: 1000px) {
+    .cluster { grid-template-columns: 1fr; }
+  }
+
+  .cluster-center {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .big-gauges {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px 18px;
+    justify-items: center;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 12px 14px;
+  }
+  @media (max-width: 700px) {
+    .big-gauges { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .svg-gauge {
+    position: relative;
+    width: 150px;
+    height: 150px;
+  }
+  .svg-gauge.gauge-hero {
+    width: 170px;
+    height: 170px;
+  }
+
+  .svg-gauge svg { width: 100%; height: 100%; transform: rotate(-135deg); }
+
+  .svg-gauge .track {
+    fill: none;
+    stroke: #1a2233;
+    stroke-width: 12;
+  }
+
+  .svg-gauge .arc {
+    fill: none;
+    stroke-width: 12;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.3s ease, stroke 0.3s;
+  }
+
+  .svg-gauge .center-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .svg-gauge .val {
+    font-size: 1.7rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .svg-gauge.gauge-hero .val { font-size: 2.0rem; }
+
+  .svg-gauge .unit {
+    font-size: 0.75rem;
+    color: var(--dim);
+    margin-top: 2px;
+  }
+
+  .svg-gauge .label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    margin-top: 6px;
+  }
+
+  /* Side tiles */
+  .side-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .tile {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+
+  .tile .t-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+    margin-bottom: 4px;
+  }
+
+  .tile .t-val {
+    font-size: 1.35rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tile .t-unit {
+    font-size: 0.75rem;
+    color: var(--dim);
+    margin-left: 3px;
+  }
+
+  .tile .t-bar {
+    height: 5px;
+    background: #1a2233;
+    border-radius: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+
+  .tile .t-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.25s ease, background 0.3s;
+  }
+
+  .tile.warn-glow {
+    box-shadow: 0 0 12px rgba(255, 106, 0, 0.45), inset 0 0 0 1px rgba(255, 106, 0, 0.5);
+    animation: pulse-warn 1.4s ease-in-out infinite;
+  }
+  .tile.crit-glow {
+    box-shadow: 0 0 16px rgba(225, 6, 0, 0.55), inset 0 0 0 1px rgba(225, 6, 0, 0.7);
+    animation: pulse-crit 0.9s ease-in-out infinite;
+  }
+  .svg-gauge.warn-glow .arc { filter: drop-shadow(0 0 6px rgba(255,106,0,0.8)); }
+  .svg-gauge.crit-glow .arc { filter: drop-shadow(0 0 8px rgba(225,6,0,0.9)); }
+  @keyframes pulse-warn {
+    0%, 100% { box-shadow: 0 0 8px rgba(255,106,0,0.3); }
+    50% { box-shadow: 0 0 18px rgba(255,106,0,0.55); }
+  }
+  @keyframes pulse-crit {
+    0%, 100% { box-shadow: 0 0 8px rgba(225,6,0,0.35); }
+    50% { box-shadow: 0 0 22px rgba(225,6,0,0.7); }
+  }
+
+  .peaks-strip {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 900px) {
+    .peaks-strip { grid-template-columns: 1fr 1fr 1fr; }
+  }
+  .peak-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .peak-card .p-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+  }
+  .peak-card .p-val {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--trd-yellow);
+    margin-top: 2px;
+  }
+  .peak-card .p-sub {
+    font-size: 0.65rem;
+    color: var(--dim);
+  }
+
+  .session-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    font-size: 0.85rem;
+  }
+  .session-panel h2 {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+    margin-bottom: 8px;
+  }
+  .session-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px 16px;
+  }
+  @media (max-width: 700px) {
+    .session-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .session-grid .sg-label { color: var(--dim); font-size: 0.75rem; }
+  .session-grid .sg-val { font-weight: 600; color: var(--trd-yellow); }
+
+  .toggle-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--dim);
+    cursor: pointer;
+    user-select: none;
+  }
+  .toggle-wrap input { accent-color: var(--trd-orange); cursor: pointer; }
+
+  /* Mini row under big gauges */
+  .mini-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+
+  @media (max-width: 900px) {
+    .mini-row { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 500px) {
+    .mini-row { grid-template-columns: 1fr 1fr; }
+  }
+
+  .mini {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+
+  .mini .m-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+  }
+
+  .mini .m-val {
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+  }
+
+  .mini .m-unit { font-size: 0.7rem; color: var(--dim); }
+
+  /* Fuel status / system strip */
+  .sys-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  @media (max-width: 700px) {
+    .sys-strip { grid-template-columns: 1fr; }
+  }
+
+  .sys-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+
+  .sys-card .s-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+  }
+
+  .sys-card .s-val {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-top: 4px;
+  }
+
+  /* Alerts under cluster */
+  .alerts-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+
+  .alerts-panel h2 {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+    margin-bottom: 10px;
+  }
+
+  .alerts { max-height: 180px; overflow-y: auto; }
+
+  .alert {
+    display: flex;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 0.82rem;
+    background: #0a0f18;
+    border-left: 3px solid var(--dim);
+  }
+
+  .alert.warn { border-left-color: var(--yellow); }
+  .alert.crit { border-left-color: var(--red); }
+  .alert.info { border-left-color: var(--cyan); }
+
+  .alert-level {
+    font-weight: 700;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    min-width: 34px;
+  }
+
+  .alert.warn .alert-level { color: var(--yellow); }
+  .alert.crit .alert-level { color: var(--red); }
+  .alert.info .alert-level { color: var(--cyan); }
+
+  .alert-msg { flex: 1; color: #c5d0e4; }
+  .alert-age { color: var(--dim); font-size: 0.72rem; }
+
+  .oil-note {
+    background: #1a1008;
+    border: 1px solid #4a2c0a;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.78rem;
+    color: #fbbf24;
+    line-height: 1.45;
+    margin-top: 10px;
+  }
+
+  .oil-note strong { color: #fcd34d; }
+
+  /* ========== METRICS VIEW ========== */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 14px;
+  }
+
+  @media (max-width: 900px) {
+    .metrics-grid { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+  }
+
+  .panel h2 {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+    margin-bottom: 12px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+  }
+
+  th {
+    text-align: left;
+    color: var(--dim);
+    font-weight: 600;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 7px 8px;
+    border-bottom: 1px solid #141b27;
+    font-variant-numeric: tabular-nums;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  .val { font-weight: 600; }
+  .val.green { color: var(--green); }
+  .val.yellow { color: var(--yellow); }
+  .val.red { color: var(--red); }
+  .val.cyan { color: var(--cyan); }
+  .val.white { color: var(--text); }
+
+  .spark {
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: var(--cyan);
+    letter-spacing: -1px;
+  }
+
+  /* Footer */
+  footer {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  footer button {
+    background: #1a140c;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+
+  footer button:hover {
+    background: #221808;
+    border-color: var(--trd-orange);
+  }
+  footer button.active {
+    background: linear-gradient(90deg, #3a1008, #3a2008);
+    border-color: var(--trd-orange);
+    color: var(--trd-yellow);
+  }
+
+  .phase {
+    margin-left: auto;
+    font-size: 0.82rem;
+    color: var(--dim);
+  }
+
+  .phase strong { color: var(--trd-yellow); }
+
+  .c-green { color: var(--green); }
+  .c-yellow { color: var(--yellow); }
+  .c-red { color: var(--red); }
+  .c-cyan { color: var(--cyan); }
+  .c-orange { color: var(--orange); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <!-- Toyota logo mark (three overlapping ellipses) -->
+    <svg class="toyota-mark" viewBox="0 0 120 80" aria-label="Toyota">
+      <ellipse cx="60" cy="42" rx="52" ry="32" fill="none" stroke="#e10600" stroke-width="5"/>
+      <ellipse cx="60" cy="42" rx="22" ry="32" fill="none" stroke="#ff6a00" stroke-width="4.5"/>
+      <ellipse cx="60" cy="30" rx="52" ry="18" fill="none" stroke="#ffcc00" stroke-width="4"/>
+    </svg>
+    <div class="title-block">
+      <div class="title">Toyota Tacoma <span>2019</span></div>
+      <div class="subtitle">2TR-FE · 2.7L I4 · OBD-II Monitor</div>
+    </div>
+  </div>
+  <div class="status">
+    <div class="view-toggle">
+      <button id="btn-cluster" class="active" onclick="setView('cluster')">Cluster</button>
+      <button id="btn-metrics" onclick="setView('metrics')">Metrics</button>
+    </div>
+    <span class="demo" id="mode-badge">DEMO MODE</span>
+    <span id="elapsed">0:00</span>
+    <span id="samples">0 samples</span>
+  </div>
+</header>
+
+<!-- ========== CLUSTER VIEW ========== -->
+<div id="view-cluster">
+  <div class="cluster">
+    <!-- Left tiles -->
+    <div class="side-stack">
+      <div class="tile">
+        <div class="t-label">Intake Air</div>
+        <div><span class="t-val" id="t-intake">—</span><span class="t-unit">°F</span></div>
+        <div class="t-bar"><div class="t-fill" id="bar-intake" style="width:0%;background:var(--cyan)"></div></div>
+      </div>
+      <div class="tile">
+        <div class="t-label">Ignition Timing</div>
+        <div><span class="t-val" id="t-timing">—</span><span class="t-unit">°</span></div>
+        <div class="t-bar"><div class="t-fill" id="bar-timing" style="width:0%;background:var(--cyan)"></div></div>
+      </div>
+      <div class="tile">
+        <div class="t-label">Throttle</div>
+        <div><span class="t-val" id="t-throttle">—</span><span class="t-unit">%</span></div>
+        <div class="t-bar"><div class="t-fill" id="bar-throttle" style="width:0%;background:var(--accent)"></div></div>
+      </div>
+      <div class="tile">
+        <div class="t-label">Trans Converter</div>
+        <div><span class="t-val" id="t-tftconv">—</span><span class="t-unit">°F</span></div>
+        <div class="t-bar"><div class="t-fill" id="bar-tftconv" style="width:0%;background:var(--trd-yellow)"></div></div>
+      </div>
+      <div class="tile">
+        <div class="t-label">Catalyst Temp</div>
+        <div><span class="t-val" id="t-cat">—</span><span class="t-unit">°F</span></div>
+        <div class="t-bar"><div class="t-fill" id="bar-cat" style="width:0%;background:var(--orange)"></div></div>
+      </div>
+    </div>
+
+    <!-- Center: full digital gauge cluster -->
+    <div class="cluster-center">
+      <div class="big-gauges">
+        <div class="svg-gauge gauge-hero" id="gauge-rpm">
+          <svg viewBox="0 0 120 120">
+            <circle class="track" cx="60" cy="60" r="48" stroke-dasharray="226.2" stroke-dashoffset="56.55"/>
+            <circle class="arc" id="arc-rpm" cx="60" cy="60" r="48"
+              stroke="var(--green)" stroke-dasharray="226.2" stroke-dashoffset="226.2"/>
+          </svg>
+          <div class="center-text">
+            <div class="val" id="g-rpm">—</div>
+            <div class="unit">rpm</div>
+            <div class="label">Engine</div>
+          </div>
+        </div>
+        <div class="svg-gauge gauge-hero" id="gauge-speed">
+          <svg viewBox="0 0 120 120">
+            <circle class="track" cx="60" cy="60" r="48" stroke-dasharray="226.2" stroke-dashoffset="56.55"/>
+            <circle class="arc" id="arc-speed" cx="60" cy="60" r="48"
+              stroke="var(--accent)" stroke-dasharray="226.2" stroke-dashoffset="226.2"/>
+          </svg>
+          <div class="center-text">
+            <div class="val" id="g-speed">—</div>
+            <div class="unit">mph</div>
+            <div class="label">Speed</div>
+          </div>
+        </div>
+        <div class="svg-gauge" id="gauge-load">
+          <svg viewBox="0 0 120 120">
+            <circle class="track" cx="60" cy="60" r="48" stroke-dasharray="226.2" stroke-dashoffset="56.55"/>
+            <circle class="arc" id="arc-load" cx="60" cy="60" r="48"
+              stroke="var(--orange)" stroke-dasharray="226.2" stroke-dashoffset="226.2"/>
+          </svg>
+          <div class="center-text">
+            <div class="val" id="g-load">—</div>
+            <div class="unit">%</div>
+            <div class="label">Load</div>
+          </div>
+        </div>
+        <div class="svg-gauge" id="gauge-coolant">
+          <svg viewBox="0 0 120 120">
+            <circle class="track" cx="60" cy="60" r="48" stroke-dasharray="226.2" stroke-dashoffset="56.55"/>
+            <circle class="arc" id="arc-coolant" cx="60" cy="60" r="48"
+              stroke="var(--cyan)" stroke-dasharray="226.2" stroke-dashoffset="226.2"/>
+          </svg>
+          <div class="center-text">
+            <div class="val" id="g-coolant">—</div>
+            <div class="unit">°F</div>
+            <div class="label">Coolant</div>
+          </div>
+        </div>
+        <div class="svg-gauge" id="gauge-volt">
+          <svg viewBox="0 0 120 120">
+            <circle class="track" cx="60" cy="60" r="48" stroke-dasharray="226.2" stroke-dashoffset="56.55"/>
+            <circle class="arc" id="arc-volt" cx="60" cy="60" r="48"
+              stroke="var(--green)" stroke-dasharray="226.2" stroke-dashoffset="226.2"/>
+          </svg>
+          <div class="center-text">
+            <div class="val" id="g-volt">—</div>
+            <div class="unit">V</div>
+            <div class="label">Voltage</div>
+          </div>
+        </div>
+        <div class="svg-gauge" id="gauge-tft">
+          <svg viewBox="0 0 120 120">
+            <circle class="track" cx="60" cy="60" r="48" stroke-dasharray="226.2" stroke-dashoffset="56.55"/>
+            <circle class="arc" id="arc-tft" cx="60" cy="60" r="48"
+              stroke="var(--trd-yellow)" stroke-dasharray="226.2" stroke-dashoffset="226.2"/>
+          </svg>
+          <div class="center-text">
+            <div class="val" id="g-tft">—</div>
+            <div class="unit">°F</div>
+            <div class="label">Trans Pan</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mini-row">
+        <div class="mini">
+          <div class="m-label">LTFT</div>
+          <div class="m-val" id="m-ltft">—</div>
+          <div class="m-unit">%</div>
+        </div>
+        <div class="mini">
+          <div class="m-label">STFT</div>
+          <div class="m-val" id="m-stft">—</div>
+          <div class="m-unit">%</div>
+        </div>
+        <div class="mini">
+          <div class="m-label">Timing</div>
+          <div class="m-val" id="m-timing">—</div>
+          <div class="m-unit">°</div>
+        </div>
+        <div class="mini">
+          <div class="m-label">MAF</div>
+          <div class="m-val" id="m-maf">—</div>
+          <div class="m-unit">g/s</div>
+        </div>
+        <div class="mini">
+          <div class="m-label">AFR</div>
+          <div class="m-val" id="m-afr">—</div>
+          <div class="m-unit">V</div>
+        </div>
+        <div class="mini">
+          <div class="m-label">MPG</div>
+          <div class="m-val" id="m-mpg">—</div>
+          <div class="m-unit">inst</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right tiles -->
+    <div class="side-stack">
+      <div class="tile">
+        <div class="t-label">AFR Upstream (WR)</div>
+        <div><span class="t-val" id="t-o2up">—</span><span class="t-unit">V</span></div>
+        <div class="t-bar"><div class="t-fill" id="bar-o2up" style="width:0%;background:var(--cyan)"></div></div>
+      </div>
+      <div class="tile">
+        <div class="t-label">O2 Downstream</div>
+        <div><span class="t-val" id="t-o2dn">—</span><span class="t-unit">V</span></div>
+        <div class="t-bar"><div class="t-fill" id="bar-o2dn" style="width:0%;background:var(--dim)"></div></div>
+      </div>
+      <div class="tile">
+        <div class="t-label">Fuel Rate</div>
+        <div><span class="t-val" id="t-fuelrate">—</span><span class="t-unit">gph</span></div>
+        <div class="t-bar"><div class="t-fill" id="bar-fuelrate" style="width:0%;background:var(--accent)"></div></div>
+      </div>
+      <div class="tile">
+        <div class="t-label">Abs Load</div>
+        <div><span class="t-val" id="t-absload">—</span><span class="t-unit">%</span></div>
+        <div class="t-bar"><div class="t-fill" id="bar-absload" style="width:0%;background:var(--orange)"></div></div>
+      </div>
+      <div class="tile">
+        <div class="t-label">Cmd Equiv Ratio</div>
+        <div><span class="t-val" id="t-equiv">—</span><span class="t-unit">λ</span></div>
+        <div class="t-bar"><div class="t-fill" id="bar-equiv" style="width:0%;background:var(--green)"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sys-strip" style="grid-template-columns: repeat(6, 1fr);">
+    <div class="sys-card">
+      <div class="s-label">Fuel System</div>
+      <div class="s-val" id="s-fuel">—</div>
+    </div>
+    <div class="sys-card">
+      <div class="s-label">Fuel Level</div>
+      <div class="s-val" id="s-fuel-level">—</div>
+    </div>
+    <div class="sys-card">
+      <div class="s-label">Fuel Rate</div>
+      <div class="s-val" id="s-fuel-rate">—</div>
+    </div>
+    <div class="sys-card">
+      <div class="s-label">Ambient</div>
+      <div class="s-val" id="s-ambient">—</div>
+    </div>
+    <div class="sys-card">
+      <div class="s-label">Trans Pan</div>
+      <div class="s-val" id="s-tft-pan">—</div>
+    </div>
+    <div class="sys-card">
+      <div class="s-label">Trans Conv</div>
+      <div class="s-val" id="s-tft-conv">—</div>
+    </div>
+    <div class="sys-card">
+      <div class="s-label">Baro / MAP</div>
+      <div class="s-val" id="s-baro">—</div>
+    </div>
+    <div class="sys-card">
+      <div class="s-label">Run Time</div>
+      <div class="s-val" id="s-runtime">—</div>
+    </div>
+  </div>
+
+  <div class="peaks-strip">
+    <div class="peak-card">
+      <div class="p-label">Peak RPM</div>
+      <div class="p-val" id="peak-rpm">—</div>
+      <div class="p-sub">this session</div>
+    </div>
+    <div class="peak-card">
+      <div class="p-label">Peak Speed</div>
+      <div class="p-val" id="peak-speed">—</div>
+      <div class="p-sub">mph</div>
+    </div>
+    <div class="peak-card">
+      <div class="p-label">Hottest Coolant</div>
+      <div class="p-val" id="peak-coolant">—</div>
+      <div class="p-sub">°F</div>
+    </div>
+    <div class="peak-card">
+      <div class="p-label">Hottest Cat</div>
+      <div class="p-val" id="peak-cat">—</div>
+      <div class="p-sub">°F</div>
+    </div>
+    <div class="peak-card">
+      <div class="p-label">Lowest Voltage</div>
+      <div class="p-val" id="peak-volt">—</div>
+      <div class="p-sub">V</div>
+    </div>
+    <div class="peak-card">
+      <div class="p-label">Inst. MPG</div>
+      <div class="p-val" id="peak-mpg">—</div>
+      <div class="p-sub">mph ÷ gph</div>
+    </div>
+  </div>
+
+  <div class="session-panel">
+    <h2>Session Summary</h2>
+    <div class="session-grid" id="session-grid">
+      <div><span class="sg-label">Samples</span><br><span class="sg-val" id="sum-samples">0</span></div>
+      <div><span class="sg-label">Elapsed</span><br><span class="sg-val" id="sum-elapsed">0:00</span></div>
+      <div><span class="sg-label">Flags (warn/crit)</span><br><span class="sg-val" id="sum-flags">0 / 0</span></div>
+      <div><span class="sg-label">AFR last V</span><br><span class="sg-val" id="sum-o2">—</span></div>
+      <div><span class="sg-label">Avg MPG (moving)</span><br><span class="sg-val" id="sum-mpg">—</span></div>
+      <div><span class="sg-label">Max |LTFT|</span><br><span class="sg-val" id="sum-ltft">—</span></div>
+      <div><span class="sg-label">Log rows</span><br><span class="sg-val" id="sum-log">0</span></div>
+      <div><span class="sg-label">Autosave</span><br><span class="sg-val" id="sum-autosave">OFF</span></div>
+    </div>
+  </div>
+
+  <div class="alerts-panel">
+    <h2>Alerts & Flags</h2>
+    <div class="alerts" id="alerts">
+      <div style="color:var(--dim);font-size:0.85rem;padding:6px 0">No active flags yet…</div>
+    </div>
+    <div class="oil-note">
+      <strong>OIL PRESSURE:</strong> NOT AVAILABLE via OBD-II on the 2TR-FE.
+      FSM (hot): ≥4.3 psi idle / 23–75 psi @ 3,000 RPM. Mechanical gauge recommended.
+    </div>
+  </div>
+</div>
+
+<!-- ========== METRICS VIEW ========== -->
+<div id="view-metrics">
+  <div class="metrics-grid">
+    <div class="panel">
+      <h2>Live Metrics</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Value</th>
+            <th>Min</th>
+            <th>Max</th>
+            <th>Trend</th>
+          </tr>
+        </thead>
+        <tbody id="metrics-body"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h2>Alerts & Flags</h2>
+      <div class="alerts" id="alerts-metrics">
+        <div style="color:var(--dim);font-size:0.85rem;padding:6px 0">No active flags yet…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <button id="btn-baseline" onclick="captureBaseline()" title="B">Baseline</button>
+  <button id="btn-clear" onclick="clearFlags()">Clear Flags</button>
+  <button id="btn-pause" onclick="togglePause()" title="P">Pause</button>
+  <button id="btn-save" onclick="saveLog()" title="S">Save Log (CSV)</button>
+  <button id="btn-clear-log" onclick="clearLog()">Clear Log</button>
+  <button id="btn-sound" onclick="toggleSound()">Sound: ON</button>
+  <label class="toggle-wrap" title="Download CSV every 5 minutes">
+    <input type="checkbox" id="autosave-toggle" onchange="toggleAutosave(this.checked)">
+    Autosave 5m
+  </label>
+  <span id="log-count" style="color:var(--dim);font-size:0.8rem;">0 rows logged</span>
+  <div class="phase">Phase: <strong id="phase">cold idle</strong> · keys: S/P/B</div>
+</footer>
+
+<script>
+// Circumference of r=48 circle = 2*pi*48 ≈ 301.59
+// We use 270° sweep → usable length = 301.59 * 0.75 ≈ 226.2
+const ARC_LEN = 226.2;
+const ARC_GAP = 301.59 - ARC_LEN; // unused portion
+
+const METRICS = [
+  { key: "rpm",      label: "Engine RPM",       unit: "rpm",  fmt: v => v.toFixed(0) },
+  { key: "speed",    label: "Vehicle Speed",    unit: "mph",  fmt: v => v.toFixed(0) },
+  { key: "coolant",  label: "Coolant Temp",     unit: "°F",   fmt: v => v.toFixed(0) },
+  { key: "intake",   label: "Intake Air Temp",  unit: "°F",   fmt: v => v.toFixed(0) },
+  { key: "ambient",  label: "Ambient Air Temp", unit: "°F",   fmt: v => v.toFixed(0) },
+  { key: "timing",   label: "Ignition Timing",  unit: "°",    fmt: v => v.toFixed(1) },
+  { key: "load",     label: "Engine Load",      unit: "%",    fmt: v => v.toFixed(1) },
+  { key: "absLoad",  label: "Absolute Load",    unit: "%",    fmt: v => v.toFixed(1) },
+  { key: "throttle", label: "Throttle Position",unit: "%",    fmt: v => v.toFixed(1) },
+  { key: "relThrottle", label: "Relative Throttle", unit: "%", fmt: v => v.toFixed(1) },
+  { key: "accel",    label: "Accelerator Pedal",unit: "%",    fmt: v => v.toFixed(1) },
+  { key: "maf",      label: "Mass Air Flow",    unit: "g/s",  fmt: v => v.toFixed(2) },
+  { key: "map",      label: "Intake MAP",       unit: "kPa",  fmt: v => v.toFixed(1) },
+  { key: "baro",     label: "Barometric Press", unit: "inHg", fmt: v => v.toFixed(2) },
+  { key: "stft",     label: "ST Fuel Trim B1",  unit: "%",    fmt: v => (v>=0?"+":"")+v.toFixed(1) },
+  { key: "ltft",     label: "LT Fuel Trim B1",  unit: "%",    fmt: v => (v>=0?"+":"")+v.toFixed(1) },
+  { key: "volt",     label: "Module Voltage",   unit: "V",    fmt: v => v.toFixed(2) },
+  { key: "fuelLevel",label: "Fuel Level",       unit: "%",    fmt: v => v.toFixed(0) },
+  { key: "fuelRate", label: "Fuel Rate",        unit: "gph",  fmt: v => v.toFixed(2) },
+  { key: "runTime",  label: "Engine Run Time",  unit: "s",    fmt: v => v.toFixed(0) },
+  { key: "o2up",     label: "AFR Up (WR V)",    unit: "V",    fmt: v => v.toFixed(3) },
+  { key: "o2dn",     label: "O2 B1S2 (down)",   unit: "V",    fmt: v => v.toFixed(3) },
+  { key: "equiv",    label: "Cmd Equiv Ratio",  unit: "",     fmt: v => v.toFixed(3) },
+  { key: "cat",      label: "Cat Temp B1S1",    unit: "°F",   fmt: v => v.toFixed(0) },
+  { key: "tftPan",   label: "Trans Pan Temp",   unit: "°F",   fmt: v => v.toFixed(0) },
+  { key: "tftConv",  label: "Trans Conv Temp",  unit: "°F",   fmt: v => v.toFixed(0) },
+];
+
+const history = {};
+const stats = {};
+const flags = [];
+const logRows = [];          // session log for CSV export
+const LOG_MAX = 20000;       // keep last ~2 hours at ~3 Hz
+const pinnedCrit = [];       // CRIT messages that stay until Clear Flags
+let samples = 0;
+let startTs = Date.now();
+let paused = false;
+let lastO2 = null;
+let o2CrossTs = 0;
+let o2SwitchCount = 0;
+let fuelStatus = "—";
+let soundOn = true;
+let autosaveOn = false;
+let autosaveTimer = null;
+const AUTOSAVE_MS = 5 * 60 * 1000;
+let warnCount = 0;
+let critCount = 0;
+let mpgSamples = [];         // for moving average when speed > 5
+
+const peaks = {
+  rpm: null,
+  speed: null,
+  coolant: null,
+  cat: null,
+  voltMin: null,
+  ltftAbs: null,
+  mpg: null,
+};
+
+function updateLogCount() {
+  const el = document.getElementById("log-count");
+  if (el) el.textContent = logRows.length + " rows logged";
+  const s = document.getElementById("sum-log");
+  if (s) s.textContent = String(logRows.length);
+}
+
+function playAlertBeep(level) {
+  if (!soundOn) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = "square";
+    o.frequency.value = level === "crit" ? 880 : 520;
+    g.gain.value = 0.08;
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (level === "crit" ? 0.35 : 0.18));
+    o.stop(ctx.currentTime + 0.4);
+    setTimeout(() => ctx.close(), 500);
+  } catch (_) {}
+}
+
+function toggleSound() {
+  soundOn = !soundOn;
+  const btn = document.getElementById("btn-sound");
+  if (btn) {
+    btn.textContent = "Sound: " + (soundOn ? "ON" : "OFF");
+    btn.classList.toggle("active", soundOn);
+  }
+}
+
+function toggleAutosave(on) {
+  autosaveOn = !!on;
+  if (autosaveTimer) {
+    clearInterval(autosaveTimer);
+    autosaveTimer = null;
+  }
+  if (autosaveOn) {
+    autosaveTimer = setInterval(() => {
+      if (logRows.length) saveLog(true);
+    }, AUTOSAVE_MS);
+  }
+  const el = document.getElementById("sum-autosave");
+  if (el) el.textContent = autosaveOn ? "ON (5m)" : "OFF";
+}
+
+function updatePeaks(data) {
+  if (data.rpm != null && (peaks.rpm == null || data.rpm > peaks.rpm)) peaks.rpm = data.rpm;
+  if (data.speed != null && (peaks.speed == null || data.speed > peaks.speed)) peaks.speed = data.speed;
+  if (data.coolant != null && (peaks.coolant == null || data.coolant > peaks.coolant)) peaks.coolant = data.coolant;
+  if (data.cat != null && (peaks.cat == null || data.cat > peaks.cat)) peaks.cat = data.cat;
+  if (data.volt != null && (peaks.voltMin == null || data.volt < peaks.voltMin)) peaks.voltMin = data.volt;
+  if (data.ltft != null) {
+    const a = Math.abs(data.ltft);
+    if (peaks.ltftAbs == null || a > peaks.ltftAbs) peaks.ltftAbs = a;
+  }
+
+  // Instant MPG from speed (mph) / fuel rate (gph)
+  let mpg = null;
+  if (data.speed != null && data.fuelRate != null && data.speed > 5 && data.fuelRate > 0.05) {
+    mpg = data.speed / data.fuelRate;
+    peaks.mpg = mpg;
+    mpgSamples.push(mpg);
+    if (mpgSamples.length > 120) mpgSamples.shift();
+  }
+
+  const set = (id, v, digits) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = v == null ? "—" : (typeof v === "number" ? v.toFixed(digits) : v);
+  };
+  set("peak-rpm", peaks.rpm, 0);
+  set("peak-speed", peaks.speed, 0);
+  set("peak-coolant", peaks.coolant, 0);
+  set("peak-cat", peaks.cat, 0);
+  set("peak-volt", peaks.voltMin, 2);
+  set("peak-mpg", mpg, 1);
+
+  // Session summary
+  const elS = document.getElementById("sum-samples");
+  if (elS) elS.textContent = String(samples);
+  const elapsed = Math.floor((Date.now() - startTs) / 1000);
+  const elE = document.getElementById("sum-elapsed");
+  if (elE) elE.textContent = Math.floor(elapsed / 60) + ":" + String(elapsed % 60).padStart(2, "0");
+  const elF = document.getElementById("sum-flags");
+  if (elF) elF.textContent = warnCount + " / " + critCount;
+  const elO = document.getElementById("sum-o2");
+  if (elO) elO.textContent = (lastO2 != null) ? lastO2.toFixed(3) : "—";
+  const elM = document.getElementById("sum-mpg");
+  if (elM) {
+    if (mpgSamples.length) {
+      const avg = mpgSamples.reduce((a, b) => a + b, 0) / mpgSamples.length;
+      elM.textContent = avg.toFixed(1);
+    } else elM.textContent = "—";
+  }
+  const elL = document.getElementById("sum-ltft");
+  if (elL) elL.textContent = peaks.ltftAbs == null ? "—" : peaks.ltftAbs.toFixed(1) + " %";
+}
+
+function setGlow(el, level) {
+  if (!el) return;
+  el.classList.remove("warn-glow", "crit-glow");
+  if (level === "crit") el.classList.add("crit-glow");
+  else if (level === "warn") el.classList.add("warn-glow");
+}
+
+function applyGlows(data) {
+  // Coolant tile
+  const coolTile = document.getElementById("t-coolant")?.closest(".tile");
+  if (data.coolant != null) {
+    if (data.coolant > 226) setGlow(coolTile, "crit");
+    else if (data.coolant > 215) setGlow(coolTile, "warn");
+    else setGlow(coolTile, null);
+  }
+  const voltTile = document.getElementById("t-volt")?.closest(".tile");
+  if (data.volt != null) {
+    if (data.volt < 12.5) setGlow(voltTile, "crit");
+    else if (data.volt < 13.2) setGlow(voltTile, "warn");
+    else setGlow(voltTile, null);
+  }
+  const timingTile = document.getElementById("t-timing")?.closest(".tile");
+  if (data.timing != null) {
+    if (data.timing < -2) setGlow(timingTile, "crit");
+    else if (data.timing < 2) setGlow(timingTile, "warn");
+    else setGlow(timingTile, null);
+  }
+  const rpmGauge = document.getElementById("gauge-rpm");
+  if (data.rpm != null) {
+    if (data.rpm > 4500) setGlow(rpmGauge, "crit");
+    else if (data.rpm > 3800) setGlow(rpmGauge, "warn");
+    else setGlow(rpmGauge, null);
+  }
+}
+
+function recordSample(data) {
+  // Wide snapshot row — same idea as the Python CSV logger
+  let mpg = "";
+  if (data.speed != null && data.fuelRate != null && data.speed > 5 && data.fuelRate > 0.05) {
+    mpg = (data.speed / data.fuelRate).toFixed(2);
+  }
+  const active = flags.slice(0, 5).map(f => f.level.toUpperCase() + ":" + f.msg).join(" | ");
+  const pinned = pinnedCrit.map(f => f.msg).join(" | ");
+  const row = {
+    timestamp: new Date().toISOString(),
+    elapsed_s: Math.round((Date.now() - startTs) / 1000),
+    fuel_status: fuelStatus || "",
+    inst_mpg: mpg,
+    active_flags: active,
+    pinned_crit: pinned,
+  };
+  METRICS.forEach(m => {
+    row[m.key] = data[m.key] != null ? data[m.key] : "";
+  });
+  logRows.push(row);
+  if (logRows.length > LOG_MAX) logRows.splice(0, logRows.length - LOG_MAX);
+  updateLogCount();
+}
+
+function saveLog(silent) {
+  if (!logRows.length) {
+    if (!silent) alert("No samples logged yet — let it run a few seconds first.");
+    return;
+  }
+  const keys = Object.keys(logRows[0]);
+  const escape = (v) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const lines = [keys.join(",")];
+  for (const row of logRows) {
+    lines.push(keys.map(k => escape(row[k])).join(","));
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  a.href = url;
+  a.download = `tacoma_2trfe_log_${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  const btn = document.getElementById("btn-save");
+  if (btn) {
+    btn.classList.add("active");
+    btn.textContent = silent ? "Auto-saved" : "Saved!";
+    setTimeout(() => {
+      btn.classList.remove("active");
+      btn.textContent = "Save Log (CSV)";
+    }, 1200);
+  }
+}
+
+function clearLog() {
+  logRows.length = 0;
+  updateLogCount();
+}
+
+METRICS.forEach(m => {
+  history[m.key] = [];
+  stats[m.key] = { min: Infinity, max: -Infinity };
+});
+
+function setView(name) {
+  document.getElementById("view-cluster").style.display = name === "cluster" ? "block" : "none";
+  document.getElementById("view-metrics").style.display = name === "metrics" ? "block" : "none";
+  document.getElementById("btn-cluster").classList.toggle("active", name === "cluster");
+  document.getElementById("btn-metrics").classList.toggle("active", name === "metrics");
+}
+
+function spark(arr, width = 14) {
+  if (arr.length < 3) return "";
+  const vals = arr.slice(-40);
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi - lo < 1e-9) return "▁".repeat(width);
+  const chars = "▁▂▃▄▅▆▇█";
+  let out = "";
+  for (let i = 0; i < width; i++) {
+    const idx = Math.round(i * (vals.length - 1) / (width - 1));
+    const norm = (vals[idx] - lo) / (hi - lo);
+    out += chars[Math.max(0, Math.min(chars.length - 1, Math.floor(norm * (chars.length - 1))))];
+  }
+  return out;
+}
+
+function colorFor(key, val) {
+  if (key === "ltft" || key === "stft") {
+    const a = Math.abs(val);
+    if (a >= 18) return "red";
+    if (a >= 12) return "yellow";
+    if (a >= 8) return "cyan";
+    return "green";
+  }
+  if (key === "coolant") {
+    if (val > 226) return "red";
+    if (val > 215) return "yellow";
+    return "green";
+  }
+  if (key === "timing") {
+    if (val < -3) return "red";
+    if (val < 2) return "yellow";
+    return "green";
+  }
+  if (key === "volt") {
+    if (val < 13.0) return "red";
+    if (val < 13.5) return "yellow";
+    return "green";
+  }
+  if (key === "cat") {
+    if (val > 1616) return "red";
+    if (val > 1508) return "yellow";
+    return "green";
+  }
+  return "white";
+}
+
+function cssColor(name) {
+  return ({ green: "var(--green)", yellow: "var(--yellow)", red: "var(--red)",
+            cyan: "var(--cyan)", accent: "var(--accent)", orange: "var(--orange)",
+            white: "var(--text)" })[name] || "var(--text)";
+}
+
+function setArc(id, pct, color) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const p = Math.max(0, Math.min(1, pct));
+  // arc starts fully offset (empty); reduce offset to fill
+  el.style.strokeDashoffset = String(ARC_LEN * (1 - p) + ARC_GAP * 0); // gap already in dasharray setup
+  // Actually with stroke-dasharray="226.2" and full circle ~301.6, the visible arc is 226.2
+  // offset 226.2 = empty, offset 0 = full 270° arc
+  el.style.strokeDashoffset = String(ARC_LEN * (1 - p));
+  el.style.stroke = cssColor(color);
+}
+
+function setTile(id, val, max, color, digits) {
+  const el = document.getElementById("t-" + id);
+  const bar = document.getElementById("bar-" + id);
+  if (!el) return;
+  el.textContent = typeof val === "number" ? val.toFixed(digits ?? 0) : "—";
+  el.className = "t-val c-" + color;
+  if (bar && typeof val === "number" && max) {
+    bar.style.width = Math.max(0, Math.min(100, (val / max) * 100)) + "%";
+    bar.style.background = cssColor(color);
+  }
+}
+
+function setMini(id, val, color, digits) {
+  const el = document.getElementById("m-" + id);
+  if (!el) return;
+  el.textContent = typeof val === "number" ? val.toFixed(digits ?? 1) : "—";
+  el.className = "m-val c-" + color;
+}
+
+function addFlag(level, msg) {
+  if (flags.some(f => f.msg === msg && Date.now() - f.ts < 12000)) return;
+  flags.unshift({ level, msg, ts: Date.now() });
+  if (flags.length > 20) flags.length = 20;
+  if (level === "crit") {
+    critCount++;
+    playAlertBeep("crit");
+    // Pin CRITs until user hits Clear Flags
+    if (!pinnedCrit.some(p => p.msg === msg)) {
+      pinnedCrit.unshift({ level: "crit", msg, ts: Date.now() });
+      if (pinnedCrit.length > 5) pinnedCrit.length = 5;
+    } else {
+      // refresh timestamp on repeat
+      const p = pinnedCrit.find(x => x.msg === msg);
+      if (p) p.ts = Date.now();
+    }
+  } else if (level === "warn") {
+    warnCount++;
+    playAlertBeep("warn");
+  }
+  renderAlerts();
+}
+
+function renderAlerts() {
+  // Pinned CRITs first, then recent flags (dedup by msg against pinned)
+  const pinnedMsgs = new Set(pinnedCrit.map(p => p.msg));
+  const rest = flags.filter(f => !(f.level === "crit" && pinnedMsgs.has(f.msg)));
+  const combined = [...pinnedCrit.map(p => ({...p, pinned: true})), ...rest];
+
+  let html;
+  if (!combined.length) {
+    html = `<div style="color:var(--dim);font-size:0.85rem;padding:6px 0">No active flags. Looking good so far.</div>`;
+  } else {
+    html = combined.map(f => {
+      const age = Math.floor((Date.now() - f.ts) / 1000);
+      const pin = f.pinned ? ' <span style="color:var(--trd-yellow);font-size:0.7rem">PINNED</span>' : '';
+      return `<div class="alert ${f.level}">
+        <div class="alert-level">${f.level.toUpperCase()}${pin}</div>
+        <div class="alert-msg">${f.msg}</div>
+        <div class="alert-age">${age}s</div>
+      </div>`;
+    }).join("");
+  }
+  document.getElementById("alerts").innerHTML = html;
+  const m = document.getElementById("alerts-metrics");
+  if (m) m.innerHTML = html;
+}
+
+function renderMetrics(data) {
+  const tbody = document.getElementById("metrics-body");
+  if (!tbody) return;
+  tbody.innerHTML = METRICS.map(m => {
+    const v = data[m.key];
+    if (v == null) return "";
+    const h = history[m.key];
+    const st = stats[m.key];
+    const col = colorFor(m.key, v);
+    const min = st.min === Infinity ? "—" : m.fmt(st.min);
+    const max = st.max === -Infinity ? "—" : m.fmt(st.max);
+    return `<tr>
+      <td>${m.label}</td>
+      <td class="val ${col}">${m.fmt(v)} <span style="color:var(--dim);font-weight:400">${m.unit}</span></td>
+      <td style="color:var(--dim)">${min}</td>
+      <td style="color:var(--dim)">${max}</td>
+      <td class="spark">${spark(h)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function updateCluster(data) {
+  // Big circular gauges
+  if (data.rpm != null) {
+    document.getElementById("g-rpm").textContent = data.rpm.toFixed(0);
+    setArc("arc-rpm", data.rpm / 4500, colorFor("rpm", data.rpm) === "white" ? "green" : colorFor("rpm", data.rpm));
+  }
+  if (data.speed != null) {
+    document.getElementById("g-speed").textContent = data.speed.toFixed(0);
+    setArc("arc-speed", data.speed / 80, "accent");
+  }
+  if (data.load != null) {
+    const el = document.getElementById("g-load");
+    if (el) el.textContent = data.load.toFixed(0);
+    setArc("arc-load", data.load / 100, data.load > 85 ? "red" : data.load > 70 ? "orange" : "orange");
+  }
+  if (data.coolant != null) {
+    const el = document.getElementById("g-coolant");
+    if (el) el.textContent = data.coolant.toFixed(0);
+    setArc("arc-coolant", (data.coolant - 140) / 80, colorFor("coolant", data.coolant));
+  }
+  if (data.volt != null) {
+    const el = document.getElementById("g-volt");
+    if (el) el.textContent = data.volt.toFixed(1);
+    setArc("arc-volt", (data.volt - 11) / 4, colorFor("volt", data.volt));
+  }
+  if (data.tftPan != null) {
+    const el = document.getElementById("g-tft");
+    if (el) el.textContent = data.tftPan.toFixed(0);
+    const c = data.tftPan >= 250 ? "red" : data.tftPan >= 220 ? "yellow" : "green";
+    setArc("arc-tft", (data.tftPan - 100) / 160, c);
+  }
+
+  // Side tiles
+  if (data.intake != null) setTile("intake", data.intake, 180, "cyan");
+  if (data.timing != null) setTile("timing", data.timing, 40, colorFor("timing", data.timing), 1);
+  if (data.throttle != null) setTile("throttle", data.throttle, 100, "accent", 1);
+  if (data.tftConv != null) {
+    const c = data.tftConv >= 260 ? "red" : data.tftConv >= 230 ? "yellow" : "green";
+    setTile("tftconv", data.tftConv, 300, c);
+  }
+  if (data.cat != null) setTile("cat", data.cat, 1600, colorFor("cat", data.cat));
+  if (data.o2up != null) setTile("o2up", data.o2up, 5.0, "cyan", 3);
+  if (data.o2dn != null) setTile("o2dn", data.o2dn, 1.0, "white", 3);
+  if (data.fuelRate != null) setTile("fuelrate", data.fuelRate, 8, "accent", 2);
+  if (data.absLoad != null) setTile("absload", data.absLoad, 100, "orange", 1);
+  if (data.equiv != null) setTile("equiv", data.equiv, 1.3, "green", 3);
+
+  // Minis
+  if (data.ltft != null) setMini("ltft", data.ltft, colorFor("ltft", data.ltft), 1);
+  if (data.stft != null) setMini("stft", data.stft, colorFor("stft", data.stft), 1);
+  if (data.timing != null) setMini("timing", data.timing, colorFor("timing", data.timing), 1);
+  if (data.maf != null) setMini("maf", data.maf, "cyan", 2);
+  if (data.o2up != null) setMini("afr", data.o2up, "cyan", 2);
+  // instant MPG if available
+  if (data.speed != null && data.fuelRate != null && data.fuelRate > 0.05) {
+    const mpg = data.speed / data.fuelRate;
+    setMini("mpg", mpg, mpg < 12 ? "yellow" : "green", 1);
+  }
+
+  // System strip
+  document.getElementById("s-fuel").textContent = fuelStatus || "—";
+  if (data.fuelLevel != null) {
+    const el = document.getElementById("s-fuel-level");
+    el.textContent = data.fuelLevel.toFixed(0) + " %";
+    el.className = "s-val " + (data.fuelLevel < 15 ? "c-red" : data.fuelLevel < 25 ? "c-yellow" : "c-green");
+  }
+  if (data.fuelRate != null) {
+    const suffix = window._fuelRateCalc ? " gph (est)" : " gph";
+    document.getElementById("s-fuel-rate").textContent = data.fuelRate.toFixed(2) + suffix;
+  }
+  if (data.ambient != null) document.getElementById("s-ambient").textContent = data.ambient.toFixed(0) + " °F";
+  if (data.tftPan != null) {
+    const el = document.getElementById("s-tft-pan");
+    el.textContent = data.tftPan.toFixed(0) + " °F";
+    el.className = "s-val " + (data.tftPan >= 250 ? "c-red" : data.tftPan >= 220 ? "c-yellow" : "c-green");
+  }
+  if (data.tftConv != null) {
+    const el = document.getElementById("s-tft-conv");
+    el.textContent = data.tftConv.toFixed(0) + " °F";
+    el.className = "s-val " + (data.tftConv >= 260 ? "c-red" : data.tftConv >= 230 ? "c-yellow" : "c-green");
+  }
+  if (data.baro != null || data.map != null) {
+    const parts = [];
+    if (data.baro != null) parts.push(data.baro.toFixed(2) + " inHg");
+    if (data.map != null) parts.push(data.map.toFixed(0) + " kPa MAP");
+    document.getElementById("s-baro").textContent = parts.join(" / ");
+  }
+  if (data.runTime != null) {
+    const rt = Math.floor(data.runTime);
+    const mm = Math.floor(rt / 60);
+    const ss = String(rt % 60).padStart(2, "0");
+    document.getElementById("s-runtime").textContent = mm + ":" + ss;
+  }
+
+  updatePeaks(data);
+  applyGlows(data);
+}
+
+function simulate() {
+  if (paused) return;
+
+  const t = (Date.now() - startTs) / 1000;
+  let phase, rpm, speed, coolant, intake, load, throttle, timing, stft, ltft, o2up;
+
+  if (t < 30) {
+    phase = "cold idle";
+    rpm = 850 + (Math.random() - 0.5) * 60;
+    speed = 0;
+    coolant = 95 + t * 1.6 + (Math.random() - 0.5) * 3;
+    intake = 82 + (Math.random() - 0.5) * 5;
+    load = 18 + (Math.random() - 0.5) * 5;
+    throttle = 8 + (Math.random() - 0.5) * 2;
+    timing = 8 + (Math.random() - 0.5) * 2;
+    stft = (Math.random() - 0.4) * 6;
+    ltft = Math.random() * 4;
+    o2up = 3.25 + 0.08 * Math.sin(t * 0.8) + (Math.random() - 0.5) * 0.08;
+    fuelStatus = "Open (cold)";
+  } else if (t < 90) {
+    phase = "warm-up → closed loop";
+    rpm = 780 + (Math.random() - 0.5) * 40;
+    speed = 0;
+    coolant = Math.min(198, 131 + (t - 30) * 1.25 + (Math.random() - 0.5) * 3);
+    intake = 90 + (Math.random() - 0.5) * 5;
+    load = 16 + (Math.random() - 0.5) * 4;
+    throttle = 7 + (Math.random() - 0.5) * 2;
+    timing = 10 + (Math.random() - 0.5) * 2;
+    stft = (Math.random() - 0.5) * 7;
+    ltft = 2 + Math.random() * 4;
+    o2up = 3.30 + 0.12 * Math.sin(t * 1.4) + (Math.random() - 0.5) * 0.1;
+    fuelStatus = "Closed loop";
+  } else {
+    phase = "drive cycle";
+    const cycle = (t - 90) % 60;
+    if (cycle < 15) {
+      rpm = 1800 + (Math.random() - 0.5) * 160;
+      speed = 34 + (Math.random() - 0.5) * 5;
+      load = 28 + (Math.random() - 0.5) * 8;
+      throttle = 18 + (Math.random() - 0.5) * 4;
+      timing = 22 + (Math.random() - 0.5) * 4;
+    } else if (cycle < 30) {
+      rpm = 2800 + (Math.random() - 0.5) * 300;
+      speed = 43 + (Math.random() - 0.5) * 6;
+      load = 55 + (Math.random() - 0.5) * 12;
+      throttle = 42 + (Math.random() - 0.5) * 8;
+      timing = 14 + (Math.random() - 0.5) * 5;
+    } else if (cycle < 45) {
+      rpm = 3400 + (Math.random() - 0.5) * 250;
+      speed = 53 + (Math.random() - 0.5) * 6;
+      load = 72 + (Math.random() - 0.5) * 10;
+      throttle = 58 + (Math.random() - 0.5) * 8;
+      timing = 8 + (Math.random() - 0.5) * 5;
+    } else {
+      rpm = 1400 + (Math.random() - 0.5) * 120;
+      speed = 30 + (Math.random() - 0.5) * 5;
+      load = 12 + (Math.random() - 0.5) * 5;
+      throttle = 5 + (Math.random() - 0.5) * 2;
+      timing = 18 + (Math.random() - 0.5) * 3;
+    }
+    coolant = 196 + (Math.random() - 0.5) * 5;
+    intake = 100 + (Math.random() - 0.5) * 8;
+    stft = (Math.random() - 0.5) * 10;
+    ltft = 3.5 + (Math.random() - 0.5) * 4;
+    o2up = 3.28 + 0.15 * Math.sin(t * 2.0) + (Math.random() - 0.5) * 0.12;
+    fuelStatus = "Closed loop";
+
+    if (Math.random() < 0.035) ltft = Math.random() < 0.5 ? 15.2 : -13.8;
+    if (Math.random() < 0.025) timing = -2.1 + (Math.random() - 0.5);
+  }
+
+  const maf = Math.max(2, (rpm / 1000) * (load / 30) * 4.2 + (Math.random() - 0.5) * 2);
+  const absLoad = Math.min(95, load * 1.15 + (Math.random() - 0.5) * 5);
+  const volt = 14.1 + (Math.random() - 0.5) * 0.25;
+  const o2dn = 0.65 + (Math.random() - 0.5) * 0.12;
+  const equiv = 1.0 + (Math.random() - 0.5) * 0.03;
+  const cat = Math.min(1435, 250 + (coolant - 95) * 6.5 + load * 5 + (Math.random() - 0.5) * 40);
+  const ambient = 72 + (Math.random() - 0.5) * 8;
+  const baro = 29.2 + (Math.random() - 0.5) * 0.4;
+  const map = Math.max(20, 101 - load * 0.55 + (Math.random() - 0.5) * 4);
+  const fuelLevel = Math.max(8, 62 - t * 0.02 + (Math.random() - 0.5) * 1);
+  const fuelRate = Math.max(0.1, (rpm / 1000) * (load / 40) * 0.75 + (Math.random() - 0.5) * 0.1);
+  const runTime = Math.floor(t);
+  const relThrottle = Math.max(0, throttle * 0.85 + (Math.random() - 0.5) * 2);
+  const accel = Math.max(0, throttle * 0.95 + (Math.random() - 0.5) * 3);
+  const tftPan = Math.min(240, 140 + (coolant - 95) * 0.55 + load * 0.35 + (Math.random() - 0.5) * 6);
+  const tftConv = tftPan + 8 + load * 0.25 + (Math.random() - 0.5) * 5;
+
+  const data = {
+    rpm, speed, coolant, intake, ambient, timing, load, absLoad, throttle,
+    relThrottle, accel, maf, map, baro, stft, ltft, volt, fuelLevel, fuelRate,
+    runTime, o2up, o2dn, equiv, cat, tftPan, tftConv
+  };
+
+  samples++;
+  for (const k of Object.keys(data)) {
+    const v = data[k];
+    history[k].push(v);
+    if (history[k].length > 50) history[k].shift();
+    if (v < stats[k].min) stats[k].min = v;
+    if (v > stats[k].max) stats[k].max = v;
+  }
+
+  lastO2 = o2up;
+
+  if (Math.abs(ltft) >= 18) addFlag("crit", `LTFT ${ltft >= 0 ? "+" : ""}${ltft.toFixed(1)}% — strong indication of problem`);
+  else if (Math.abs(ltft) >= 12) addFlag("warn", `LTFT ${ltft >= 0 ? "+" : ""}${ltft.toFixed(1)}% — elevated`);
+  if (timing < -2) addFlag("crit", `Timing ${timing.toFixed(1)}° — significant retard`);
+  if (coolant > 217) addFlag("warn", `Coolant ${coolant.toFixed(0)}°F — running hot`);
+  if (volt < 13.0) addFlag("warn", `Voltage ${volt.toFixed(2)}V — charging issue?`);
+  // Wideband AFR: no narrowband switch logic. Soft range check only.
+  if (coolant > 167 && rpm > 600 && samples > 40 && (o2up < 1.2 || o2up > 5.0)) {
+    addFlag("warn", `AFR upstream voltage out of range (${o2up.toFixed(3)}V)`);
+  }
+
+  document.getElementById("phase").textContent = phase;
+  document.getElementById("samples").textContent = samples + " samples";
+  const elapsed = Math.floor((Date.now() - startTs) / 1000);
+  document.getElementById("elapsed").textContent =
+    Math.floor(elapsed / 60) + ":" + String(elapsed % 60).padStart(2, "0");
+
+  updateCluster(data);
+  renderMetrics(data);
+  recordSample(data);
+}
+
+function captureBaseline() {
+  addFlag("info", "Baseline captured from current readings");
+  const btn = document.getElementById("btn-baseline");
+  btn.classList.add("active");
+  setTimeout(() => btn.classList.remove("active"), 800);
+}
+
+function clearFlags() {
+  flags.length = 0;
+  pinnedCrit.length = 0;
+  renderAlerts();
+}
+
+function togglePause() {
+  paused = !paused;
+  document.getElementById("btn-pause").textContent = paused ? "Resume" : "Pause";
+  document.getElementById("btn-pause").classList.toggle("active", paused);
+}
+
+// ---- Live mode (Python --web server) ----
+let liveMode = false;
+const KEY_MAP = {
+  RPM: "rpm", SPEED: "speed", COOLANT_TEMP: "coolant", INTAKE_TEMP: "intake",
+  AMBIENT_AIR_TEMP: "ambient", TIMING_ADVANCE: "timing", ENGINE_LOAD: "load",
+  ABSOLUTE_LOAD: "absLoad", THROTTLE_POS: "throttle",
+  RELATIVE_THROTTLE_POS: "relThrottle", ACCELERATOR_POS_D: "accel",
+  MAF: "maf", INTAKE_PRESSURE: "map", BAROMETRIC_PRESSURE: "baro",
+  SHORT_FUEL_TRIM_1: "stft", LONG_FUEL_TRIM_1: "ltft",
+  CONTROL_MODULE_VOLTAGE: "volt", FUEL_LEVEL: "fuelLevel", FUEL_RATE: "fuelRate",
+  RUN_TIME: "runTime", O2_S1_WR_VOLTAGE: "o2up", O2_B1S2: "o2dn",
+  COMMANDED_EQUIV_RATIO: "equiv", CATALYST_TEMP_B1S1: "cat",
+  TFT_PAN: "tftPan", TFT_CONV: "tftConv",
+};
+
+async function pollLive() {
+  if (paused) return;
+  try {
+    const res = await fetch("/api/data");
+    if (!res.ok) throw new Error("bad");
+    const snap = await res.json();
+    liveMode = true;
+
+    const badge = document.getElementById("mode-badge");
+    badge.textContent = snap.demo ? "DEMO (server)" : "LIVE";
+    badge.style.color = snap.demo ? "var(--magenta)" : "var(--green)";
+
+    document.getElementById("samples").textContent = snap.samples + " samples";
+    const elapsed = snap.elapsed || 0;
+    document.getElementById("elapsed").textContent =
+      Math.floor(elapsed / 60) + ":" + String(elapsed % 60).padStart(2, "0");
+    document.getElementById("phase").textContent = snap.demo ? "server demo" : "live truck data";
+
+    window._fuelRateCalc = !!snap.fuel_rate_calculated;
+
+    const data = {};
+    for (const [py, local] of Object.entries(KEY_MAP)) {
+      if (snap.data[py] != null) data[local] = snap.data[py];
+    }
+
+    if (snap.data.FUEL_STATUS) {
+      const fs = snap.data.FUEL_STATUS;
+      fuelStatus = Array.isArray(fs) ? (fs[0] || "—") : String(fs);
+      if (fuelStatus.includes("Closed loop")) fuelStatus = "Closed loop";
+      else if (fuelStatus.includes("Open loop due to insufficient")) fuelStatus = "Open (cold)";
+      else if (fuelStatus.includes("Open loop")) fuelStatus = "Open loop";
+    }
+
+    for (const [py, local] of Object.entries(KEY_MAP)) {
+      if (snap.history && snap.history[py]) {
+        history[local] = snap.history[py].slice(-50);
+      } else if (data[local] != null) {
+        history[local].push(data[local]);
+        if (history[local].length > 50) history[local].shift();
+      }
+      if (data[local] != null) {
+        if (data[local] < stats[local].min) stats[local].min = data[local];
+        if (data[local] > stats[local].max) stats[local].max = data[local];
+      }
+    }
+
+    updateCluster(data);
+    renderMetrics(data);
+    recordSample(data);
+
+    if (snap.flags && snap.flags.length) {
+      flags.length = 0;
+      snap.flags.forEach(f => {
+        flags.push({
+          level: (f.level || "info").toLowerCase(),
+          msg: f.msg,
+          ts: Date.now() - (f.age || 0) * 1000
+        });
+      });
+    }
+    if (snap.pinned_crit && snap.pinned_crit.length) {
+      pinnedCrit.length = 0;
+      snap.pinned_crit.forEach(p => {
+        pinnedCrit.push({
+          level: "crit",
+          msg: p.msg,
+          ts: Date.now() - (p.age || 0) * 1000
+        });
+      });
+    }
+    if ((snap.flags && snap.flags.length) || (snap.pinned_crit && snap.pinned_crit.length)) {
+      renderAlerts();
+    }
+  } catch (e) {
+    liveMode = false;
+  }
+}
+
+renderAlerts();
+
+// Keyboard shortcuts: S save, P pause, B baseline
+document.addEventListener("keydown", (e) => {
+  if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+  const k = e.key.toLowerCase();
+  if (k === "s") { e.preventDefault(); saveLog(); }
+  else if (k === "p") { e.preventDefault(); togglePause(); }
+  else if (k === "b") { e.preventDefault(); captureBaseline(); }
+});
+
+(async function boot() {
+  const soundBtn = document.getElementById("btn-sound");
+  if (soundBtn) soundBtn.classList.add("active");
+  try {
+    const res = await fetch("/api/data");
+    if (res.ok) {
+      liveMode = true;
+      setInterval(pollLive, 400);
+      pollLive();
+      return;
+    }
+  } catch (_) {}
+  setInterval(simulate, 350);
+  simulate();
+})();
+</script>
+</body>
+</html>
