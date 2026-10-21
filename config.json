@@ -1,0 +1,41 @@
+{
+  "serial_port": null,
+  "web_port": 8765,
+  "poll_interval": 0.5,
+  "log_dir": "logs",
+  "log_retention_days": 60,
+  "reconnect": {
+    "stale_seconds": 5.0,
+    "backoff_initial": 2.0,
+    "backoff_max": 60.0
+  },
+  "thresholds": {
+    "ltft_warn": 12,
+    "ltft_crit": 18,
+    "stft_crit": 20,
+    "trim_avg_warn": 15,
+    "trim_avg_crit": 18,
+    "timing_retard": -2,
+    "timing_low": 3,
+    "timing_retard_crit_load": 40,
+    "timing_low_load": 30,
+    "timing_baseline_delta": 12,
+    "timing_sudden_delta": 10,
+    "coolant_hot": 217,
+    "coolant_overheat": 230,
+    "voltage_warn": 12.8,
+    "voltage_crit": 12.0,
+    "fuel_low": 15,
+    "fuel_crit": 10,
+    "lug_rpm_min": 800,
+    "lug_rpm_max": 2000,
+    "lug_load": 85,
+    "afr_check_coolant_min": 167,
+    "afr_check_rpm_min": 600,
+    "afr_check_min_samples": 40,
+    "afr_volt_low": 1.2,
+    "afr_volt_high": 5.0,
+    "catalyst_hot": 1560,
+    "flag_cooldown_s": 8.0
+  }
+}

@@ -33,10 +33,8 @@ import threading
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlparse
 
 import obd
 from obd import OBDCommand, Unit
@@ -50,6 +48,11 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from rich.align import Align
+
+import config as cfgmod
+from config import log, make_log_path
+from demo import demo_loop
+from web_dashboard import start_web_server
 
 # -----------------------------------------------------------------------------
 # Configuration / Tuning
@@ -113,6 +116,7 @@ def _decode_toyota_tft(messages):
         temp_f = (A * 459.0 / 255.0) + (B * 1.6 / 255.0) - 40.0
         return temp_f * Unit.fahrenheit
     except Exception:
+        log.debug("format fallback", exc_info=True)
         return None
 
 CMD_TFT_PAN = OBDCommand(
@@ -257,6 +261,7 @@ def _format_value(name: str, value: Any) -> str:
             return f"{mag} {unit}".strip()
         return str(value)
     except Exception:
+        log.debug("format fallback", exc_info=True)
         return str(value)
 
 def _sparkline(values: List[float], width: int = 18) -> str:
@@ -356,7 +361,11 @@ def _severity_color(level: str) -> str:
 
 class TacomaMonitor:
     def __init__(self, port: Optional[str] = None, log_path: Optional[str] = None,
-                 poll_interval: float = 0.5, demo: bool = False, lite_pids: bool = False):
+                 poll_interval: float = 0.5, demo: bool = False, lite_pids: bool = False,
+                 config: Optional[Dict[str, Any]] = None):
+        self.cfg = config or cfgmod.load_config()
+        self.th: Dict[str, Any] = self.cfg["thresholds"]
+        self.log_dir: str = self.cfg.get("log_dir", "logs")
         self.port = port
         self.conn: Optional[obd.OBD] = None
         self.poll_interval = poll_interval
@@ -408,6 +417,13 @@ class TacomaMonitor:
         self._demo_thread: Optional[threading.Thread] = None
         self._demo_t0 = time.time()
 
+        # Reconnect watchdog state
+        self.conn_state = "DEMO" if demo else "INIT"   # INIT / CONNECTED / STALE / RECONNECTING / DISCONNECTED
+        self.reconnect_count = 0
+        self.last_response_ts = 0.0
+        self._watchdog_thread: Optional[threading.Thread] = None
+        self._reconnecting = False
+
     # ---------------- Connection & Watching ----------------
 
     def connect(self) -> bool:
@@ -420,6 +436,13 @@ class TacomaMonitor:
             return True
 
         self.console.print("[bold]Connecting to OBD-II adapter...[/bold]")
+        ok = self._open_connection(verbose=True)
+        self.conn_state = "CONNECTED" if ok else "DISCONNECTED"
+        if ok:
+            self.last_response_ts = time.time()
+        return ok
+
+    def _open_connection(self, verbose: bool = True) -> bool:
         try:
             # Async supports watch()/start()/stop() used by the live dashboard.
             # fast=False is more reliable on many USB ELM clones.
@@ -432,7 +455,9 @@ class TacomaMonitor:
                 check_voltage=False,    # skip AT RV hang on some adapters
             )
         except Exception as e:
-            self.console.print(f"[red]Connection error:[/red] {e}")
+            log.exception("OBD connection error")
+            if verbose:
+                self.console.print(f"[red]Connection error:[/red] {e}")
             return False
 
         status = self.conn.status()
@@ -444,7 +469,7 @@ class TacomaMonitor:
                 try:
                     return str(pn())
                 except Exception:
-                    pass
+                    log.exception("suppressed error")
             if isinstance(pn, str) and pn:
                 return pn
             p = getattr(c, "port", None)
@@ -454,6 +479,8 @@ class TacomaMonitor:
 
         port_name = _port_label(self.conn)
         if status == obd.OBDStatus.NOT_CONNECTED:
+            if not verbose:
+                return False
             self.console.print("[red]Failed to connect.[/red] Check: adapter in truck OBD port, key ON/engine running, dialout group, port not in use.")
             self.console.print("Try:  ls /dev/ttyUSB* /dev/ttyACM* ; python -m serial.tools.list_ports")
             try:
@@ -462,9 +489,11 @@ class TacomaMonitor:
                 if ports:
                     self.console.print(f"Detected ports: {', '.join(ports)}")
             except Exception:
-                pass
+                log.exception("suppressed error")
             return False
 
+        if not verbose:
+            return status == obd.OBDStatus.CAR_CONNECTED
         proto = getattr(getattr(self.conn, "protocol", None), "name", None) or "unknown"
         self.console.print(f"[green]Connected[/green] via {port_name}  |  Protocol: {proto}  |  Status: {status}")
 
@@ -499,7 +528,7 @@ class TacomaMonitor:
             try:
                 self.conn.stop()
             except Exception:
-                pass
+                log.exception("suppressed error")
 
         # Default: full INTERESTED set. --lite uses CORE only if adapter stalls.
         watch_names = CORE_PIDS if getattr(self, "lite_pids", False) else INTERESTED
@@ -512,20 +541,20 @@ class TacomaMonitor:
                         try:
                             self._on_response(n, response)
                         except Exception:
-                            pass  # never let a bad PID kill the async thread
+                            log.exception("suppressed error")  # never let a bad PID kill the async thread
                     return cb
                 try:
                     self.conn.watch(cmd, callback=make_cb(name))
                     watched += 1
                 except Exception:
-                    pass
+                    log.exception("suppressed error")
 
         # Space out queries so the vLinker doesn't wedge
         if hasattr(self.conn, "delay_commands"):
             try:
                 self.conn.delay_commands = True
             except Exception:
-                pass
+                log.exception("suppressed error")
 
         self.conn.start()
         mode = "LITE/CORE" if getattr(self, "lite_pids", False) else "FULL"
@@ -534,157 +563,75 @@ class TacomaMonitor:
             f"[dim]Use --lite if the adapter stalls.[/dim]"
         )
 
-    def _demo_loop(self):
-        """Generate realistic 2TR-FE style values that evolve over time."""
-        import math
-        import random
+    # ---------------- Reconnect watchdog ----------------
 
+    def _watchdog_loop(self):
+        """Detect a dropped adapter or stale data and reconnect with exponential backoff."""
+        rc = self.cfg.get("reconnect", {})
+        stale_s = float(rc.get("stale_seconds", 5.0))
+        b0 = float(rc.get("backoff_initial", 2.0))
+        bmax = float(rc.get("backoff_max", 60.0))
         while self.running:
+            time.sleep(1.0)
+            if not self.running or self.demo:
+                continue
+            problem = None
             try:
-                self._demo_tick(math, random)
+                if self.conn is None:
+                    problem = "no connection"
+                elif self.conn.status() != obd.OBDStatus.CAR_CONNECTED:
+                    problem = f"status {self.conn.status()}"
+                elif self.last_response_ts and time.time() - self.last_response_ts > stale_s:
+                    problem = f"no OBD data for {time.time() - self.last_response_ts:.0f}s"
+                    self.conn_state = "STALE"
             except Exception:
-                pass  # never let demo data kill the monitor
-            time.sleep(0.35)
+                log.exception("watchdog status check failed")
+                problem = "status check error"
+            if not problem:
+                continue
+            log.warning("Adapter problem (%s); reconnecting", problem)
+            self.add_flag("WARN", f"OBD link lost ({problem}) — reconnecting")
+            delay = b0
+            self._reconnecting = True
+            while self.running:
+                self.conn_state = "RECONNECTING"
+                self._close_conn()
+                if self._open_connection(verbose=False):
+                    self.reconnect_count += 1
+                    self.last_response_ts = time.time()
+                    try:
+                        self.start_watching()
+                        self.conn_state = "CONNECTED"
+                        log.info("Reconnected (#%d)", self.reconnect_count)
+                        self.add_flag("INFO", f"OBD reconnected (#{self.reconnect_count})")
+                        break
+                    except Exception:
+                        log.exception("re-watch after reconnect failed")
+                self.conn_state = "DISCONNECTED"
+                log.info("Reconnect failed; retrying in %.0fs", delay)
+                end = time.time() + delay
+                while self.running and time.time() < end:
+                    time.sleep(0.25)
+                delay = min(delay * 2, bmax)
+            self._reconnecting = False
 
-    def _demo_tick(self, math, random):
-        t = time.time() - self._demo_t0
-        # Phases: 0-30s cold idle, 30-90s warm-up, then mixed driving
-        phase = "cold" if t < 30 else ("warmup" if t < 90 else "drive")
+    def _close_conn(self):
+        c = self.conn
+        self.conn = None
+        if not c:
+            return
+        for m in ("stop", "close"):
+            try:
+                if hasattr(c, m):
+                    getattr(c, m)()
+            except Exception:
+                log.exception("conn.%s() failed", m)
 
-        # Base values by phase
-        if phase == "cold":
-            rpm = 850 + random.uniform(-30, 40)
-            speed = 0
-            coolant = 35 + t * 0.9 + random.uniform(-1, 1)
-            intake = 28 + random.uniform(-2, 2)
-            load = 18 + random.uniform(-3, 4)
-            throttle = 8 + random.uniform(-1, 2)
-            timing = 8 + random.uniform(-1, 2)
-            stft = random.uniform(-3, 5)
-            ltft = random.uniform(0, 4)
-            fuel_status = ("Open loop due to insufficient engine temperature", "")
-            # Wideband AFR voltage (Toyota-style ~3.0–3.5 V around stoich)
-            o2_up = 3.25 + 0.08 * math.sin(t * 0.8) + random.uniform(-0.05, 0.05)
-        elif phase == "warmup":
-            rpm = 780 + random.uniform(-20, 30)
-            speed = 0
-            coolant = min(92, 55 + (t - 30) * 0.7 + random.uniform(-1, 1))
-            intake = 32 + random.uniform(-2, 2)
-            load = 16 + random.uniform(-2, 3)
-            throttle = 7 + random.uniform(-1, 1)
-            timing = 10 + random.uniform(-1, 2)
-            stft = random.uniform(-4, 4)
-            ltft = random.uniform(1, 6)
-            fuel_status = ("Closed loop, using oxygen sensor feedback to determine fuel mix", "")
-            o2_up = 3.30 + 0.12 * math.sin(t * 1.4) + random.uniform(-0.06, 0.06)
-        else:
-            # Simulated drive cycle with some variation
-            cycle = (t - 90) % 60
-            if cycle < 15:          # light cruise
-                rpm = 1800 + random.uniform(-80, 100)
-                speed = 55 + random.uniform(-4, 6)
-                load = 28 + random.uniform(-4, 6)
-                throttle = 18 + random.uniform(-2, 3)
-                timing = 22 + random.uniform(-2, 3)
-            elif cycle < 30:        # acceleration
-                rpm = 2800 + random.uniform(-150, 200)
-                speed = 70 + random.uniform(-5, 8)
-                load = 55 + random.uniform(-6, 10)
-                throttle = 42 + random.uniform(-4, 6)
-                timing = 14 + random.uniform(-3, 4)
-            elif cycle < 45:        # harder pull
-                rpm = 3400 + random.uniform(-100, 150)
-                speed = 85 + random.uniform(-5, 7)
-                load = 72 + random.uniform(-5, 8)
-                throttle = 58 + random.uniform(-4, 5)
-                timing = 8 + random.uniform(-4, 3)
-            else:                   # deceleration / coast
-                rpm = 1400 + random.uniform(-60, 80)
-                speed = 48 + random.uniform(-6, 5)
-                load = 12 + random.uniform(-3, 4)
-                throttle = 5 + random.uniform(-1, 2)
-                timing = 18 + random.uniform(-2, 3)
-
-            coolant = 91 + random.uniform(-1.5, 2.5)
-            intake = 38 + random.uniform(-3, 4)
-            stft = random.uniform(-6, 7)
-            ltft = 3.5 + random.uniform(-2, 3)
-            fuel_status = ("Closed loop, using oxygen sensor feedback to determine fuel mix", "")
-            o2_up = 3.28 + 0.15 * math.sin(t * 2.0) + random.uniform(-0.08, 0.08)
-
-        # Shared derived values
-        maf = max(2.0, (rpm / 1000) * (load / 30) * 4.2 + random.uniform(-1, 1.5))
-        abs_load = min(95, load * 1.15 + random.uniform(-3, 4))
-        voltage = 14.1 + random.uniform(-0.15, 0.18)
-        o2_down = 0.65 + random.uniform(-0.08, 0.08)
-        equiv = 1.0 + random.uniform(-0.02, 0.02)
-        cat_temp = min(780, 120 + (coolant - 30) * 6.5 + (load * 3) + random.uniform(-15, 20))
-
-        # Occasionally inject a mild anomaly so flags can fire
-        if phase == "drive" and random.random() < 0.04:
-            ltft = random.choice([14.5, -13.0, 16.0])
-        if phase == "drive" and random.random() < 0.03:
-            timing = -1.5 + random.uniform(-1, 1)
-
-        # Demo values in native OBD units (converted in _on_response)
-        ambient_c = 22 + random.uniform(-3, 5)                 # ~72°F-ish Oklahoma day
-        baro_kpa = 98 + random.uniform(-2, 2)                  # ~29 inHg
-        fuel_level = max(8, 62 - t * 0.02 + random.uniform(-1, 1))
-        run_time = max(0, int(t))
-        map_kpa = max(20, 101 - load * 0.55 + random.uniform(-3, 3))
-        rel_throttle = max(0, throttle * 0.85 + random.uniform(-2, 2))
-        accel_pedal = max(0, throttle * 0.95 + random.uniform(-3, 3))
-        # rough L/h from load/rpm for demo
-        fuel_rate_lph = max(0.4, (rpm / 1000) * (load / 40) * 2.8 + random.uniform(-0.2, 0.3))
-
-        # Feed through the same path as real responses
-        fake = {
-            "RPM": rpm,
-            "SPEED": speed,
-            "COOLANT_TEMP": coolant,
-            "INTAKE_TEMP": intake,
-            "AMBIENT_AIR_TEMP": ambient_c,
-            "TIMING_ADVANCE": timing,
-            "ENGINE_LOAD": load,
-            "ABSOLUTE_LOAD": abs_load,
-            "THROTTLE_POS": throttle,
-            "RELATIVE_THROTTLE_POS": rel_throttle,
-            "ACCELERATOR_POS_D": accel_pedal,
-            "MAF": maf,
-            "INTAKE_PRESSURE": map_kpa,
-            "BAROMETRIC_PRESSURE": baro_kpa,
-            "SHORT_FUEL_TRIM_1": stft,
-            "LONG_FUEL_TRIM_1": ltft,
-            "CONTROL_MODULE_VOLTAGE": voltage,
-            "FUEL_STATUS": fuel_status,
-            "FUEL_LEVEL": fuel_level,
-            "FUEL_RATE": fuel_rate_lph,
-            "RUN_TIME": run_time,
-            "O2_S1_WR_VOLTAGE": max(1.5, min(4.5, o2_up)),
-            "O2_B1S2": max(0.1, min(0.9, o2_down)),
-            "COMMANDED_EQUIV_RATIO": equiv,
-            "CATALYST_TEMP_B1S1": cat_temp,
-        }
-
-        for name, val in fake.items():
-            class FakeResp:
-                def __init__(self, v):
-                    self.value = v
-                def is_null(self):
-                    return False
-            self._on_response(name, FakeResp(val))
-
-        # Demo TFT (Mode 22 path is skipped in demo — inject directly)
-        tft_pan = 175 + random.uniform(-5, 12) + (load * 0.15)
-        tft_conv = tft_pan + random.uniform(5, 25)
-        with self._lock:
-            self.data["TFT_PAN"] = tft_pan
-            self.data["TFT_CONV"] = tft_conv
-            self.history["TFT_PAN"].append((time.time(), tft_pan))
-            self.history["TFT_CONV"].append((time.time(), tft_conv))
-            self._tft_ok = True
+    def _demo_loop(self):
+        demo_loop(self)
 
     def _on_response(self, name: str, response: obd.OBDResponse):
+        self.last_response_ts = time.time()
         if response.is_null() or response.value is None:
             return
         val = response.value
@@ -789,7 +736,7 @@ class TacomaMonitor:
 
     def _poll_tft(self) -> None:
         """Query Toyota Mode 22 transmission fluid temps (slow path)."""
-        if self.demo or self.conn is None:
+        if self.demo or self.conn is None or self._reconnecting:
             return
         now = time.time()
         if now - self._last_tft_poll < TFT_POLL_INTERVAL:
@@ -822,7 +769,7 @@ class TacomaMonitor:
                 elif numeric >= meta.get("warn_high", 230):
                     self.add_flag("WARN", f"{meta.get('label', name)} {numeric:.0f}°F — running hot")
             except Exception:
-                pass  # Mode 22 can fail quietly on some adapters / ignition states
+                log.exception("suppressed error")  # Mode 22 can fail quietly on some adapters / ignition states
 
     def _write_snapshot(self):
         """Write one clean wide-row CSV snapshot of all current metrics."""
@@ -859,12 +806,13 @@ class TacomaMonitor:
                 self.log_writer.writerow(row)
                 self.log_file.flush()
         except Exception:
-            pass  # never let logging kill the monitor
+            log.exception("suppressed error")  # never let logging kill the monitor
 
     # ---------------- Flagging Logic ----------------
 
     def _quick_flag_check(self, name: str, val: Any, numeric: Optional[float]):
         """Lightweight immediate checks to populate flags quickly."""
+        th = self.th
         now = time.time()
         if numeric is None:
             return
@@ -874,16 +822,16 @@ class TacomaMonitor:
         msg = None
 
         if name == "LONG_FUEL_TRIM_1":
-            if abs(numeric) >= 18:
+            if abs(numeric) >= th["ltft_crit"]:
                 key = "ltft_crit"
                 level = "CRIT"
                 msg = f"LTFT {numeric:+.1f}% — strong indication of problem (vacuum leak, MAF, exhaust, fuel delivery)"
-            elif abs(numeric) >= 12:
+            elif abs(numeric) >= th["ltft_warn"]:
                 key = "ltft_warn"
                 msg = f"LTFT {numeric:+.1f}% — elevated, watch for drift"
 
         elif name == "SHORT_FUEL_TRIM_1":
-            if abs(numeric) >= 20:
+            if abs(numeric) >= th["stft_crit"]:
                 key = "stft_crit"
                 level = "CRIT"
                 msg = f"STFT {numeric:+.1f}% — large correction happening right now"
@@ -892,42 +840,42 @@ class TacomaMonitor:
             # Very low/negative timing is often bad, especially if load is high
             load = self.data.get("ENGINE_LOAD")
             load_val = load.magnitude if hasattr(load, "magnitude") else (load if isinstance(load, (int,float)) else 0)
-            if numeric < -2:
+            if numeric < th["timing_retard"]:
                 key = "timing_retard"
-                level = "CRIT" if load_val > 40 else "WARN"
+                level = "CRIT" if load_val > th["timing_retard_crit_load"] else "WARN"
                 msg = f"Timing {numeric:.1f}° — significant retard (knock? bad fuel? sensor?)"
-            elif numeric < 3 and load_val > 30:
+            elif numeric < th["timing_low"] and load_val > th["timing_low_load"]:
                 key = "timing_low_load"
                 msg = f"Timing only {numeric:.1f}° at {load_val:.0f}% load"
 
         elif name == "COOLANT_TEMP":
-            if numeric > 230:       # ~110°C
+            if numeric > th["coolant_overheat"]:       # ~110°C
                 key = "ect_overheat"
                 level = "CRIT"
                 msg = f"Coolant {numeric:.0f}°F — overheating risk"
-            elif numeric > 217:     # ~103°C
+            elif numeric > th["coolant_hot"]:     # ~103°C
                 key = "ect_hot"
                 msg = f"Coolant {numeric:.0f}°F — running hot"
 
         elif name == "CONTROL_MODULE_VOLTAGE":
-            if numeric < 12.8:
+            if numeric < th["voltage_warn"]:
                 key = "voltage_low"
-                level = "CRIT" if numeric < 12.0 else "WARN"
+                level = "CRIT" if numeric < th["voltage_crit"] else "WARN"
                 msg = f"System voltage {numeric:.2f}V — charging or battery issue?"
 
         elif name == "FUEL_LEVEL":
-            if numeric <= 10:
+            if numeric <= th["fuel_crit"]:
                 key = "fuel_crit"
                 level = "CRIT"
                 msg = f"Fuel level {numeric:.0f}% — critically low"
-            elif numeric <= 15:
+            elif numeric <= th["fuel_low"]:
                 key = "fuel_low"
                 msg = f"Fuel level {numeric:.0f}% — getting low"
 
         if key and msg:
             # Cooldown to avoid spam
             last = self.flag_cooldown.get(key, 0)
-            if now - last > 8.0:   # seconds
+            if now - last > th["flag_cooldown_s"]:   # seconds
                 self.flag_cooldown[key] = now
                 with self._lock:
                     self.flags.append((now, level, msg))
@@ -942,6 +890,7 @@ class TacomaMonitor:
 
     def analyze_and_flag(self):
         """Deeper / trend-based analysis. Called from the render path."""
+        th = self.th
         now = time.time()
         with self._lock:
             current_flags = []
@@ -956,8 +905,8 @@ class TacomaMonitor:
             if len(h) >= MIN_HISTORY_FOR_DELTA:
                 recent = [x[1] for x in h[-12:]]
                 avg = sum(recent) / len(recent)
-                if abs(avg) >= 15:
-                    level = "CRIT" if abs(avg) >= 18 else "WARN"
+                if abs(avg) >= th["trim_avg_warn"]:
+                    level = "CRIT" if abs(avg) >= th["trim_avg_crit"] else "WARN"
                     current_flags.append((now, level,
                         f"{trim_name} avg {avg:+.1f}% over last samples — persistent correction"))
 
@@ -967,16 +916,16 @@ class TacomaMonitor:
             tval = timing.magnitude if hasattr(timing, "magnitude") else timing
             if "TIMING_ADVANCE" in base:
                 bval = base["TIMING_ADVANCE"]
-                if isinstance(bval, (int, float)) and abs(tval - bval) > 12:
+                if isinstance(bval, (int, float)) and abs(tval - bval) > th["timing_baseline_delta"]:
                     current_flags.append((now, "WARN",
                         f"Timing {tval:.1f}° vs baseline {bval:.1f}° (Δ {tval-bval:+.1f}°)"))
 
             # Sudden change detector
-            th = hist.get("TIMING_ADVANCE", [])
-            if len(th) >= 8:
-                recent = [x[1] for x in th[-8:]]
+            th_hist = hist.get("TIMING_ADVANCE", [])
+            if len(th_hist) >= 8:
+                recent = [x[1] for x in th_hist[-8:]]
                 delta = recent[-1] - recent[0]
-                if abs(delta) > 10:
+                if abs(delta) > th["timing_sudden_delta"]:
                     current_flags.append((now, "WARN",
                         f"Timing moved {delta:+.1f}° in recent window"))
 
@@ -987,7 +936,7 @@ class TacomaMonitor:
             r = rpm.magnitude if hasattr(rpm, "magnitude") else rpm
             l = load.magnitude if hasattr(load, "magnitude") else load
             # Only flag while actually moving — idle/creep can show high calc load
-            if 800 < r < 2000 and l > 85:
+            if th["lug_rpm_min"] < r < th["lug_rpm_max"] and l > th["lug_load"]:
                 current_flags.append((now, "INFO", "Very high load at low RPM — lugging?"))
 
         # Upstream AFR (wideband) — no narrowband "switch" logic.
@@ -1001,13 +950,13 @@ class TacomaMonitor:
         if coolant:
             cool_val = coolant.magnitude if hasattr(coolant, "magnitude") else coolant
 
-        if (cool_val is not None and cool_val > 167 and
-                rpm_val is not None and rpm_val > 600 and
-                self.o2_last_val is not None and self.samples > 40):
+        if (cool_val is not None and cool_val > th["afr_check_coolant_min"] and
+                rpm_val is not None and rpm_val > th["afr_check_rpm_min"] and
+                self.o2_last_val is not None and self.samples > th["afr_check_min_samples"]):
             # Typical Toyota AFR sensor voltage around stoich is roughly 2.5–3.8 V.
             # Outside ~1.5–4.5 V for a sustained period is suspicious.
             v = self.o2_last_val
-            if v < 1.2 or v > 5.0:
+            if v < th["afr_volt_low"] or v > th["afr_volt_high"]:
                 current_flags.append((now, "WARN",
                     f"AFR upstream voltage out of range ({v:.3f}V) — check sensor/wiring"))
 
@@ -1015,7 +964,7 @@ class TacomaMonitor:
         cat = data.get("CATALYST_TEMP_B1S1")
         if cat is not None:
             cval = cat.magnitude if hasattr(cat, "magnitude") else cat
-            if isinstance(cval, (int, float)) and cval > 1560:   # ~850°C
+            if isinstance(cval, (int, float)) and cval > th["catalyst_hot"]:   # ~850°C
                 current_flags.append((now, "WARN", f"Catalyst temp {cval:.0f}°F — running very hot"))
 
         # Merge into main flag list (dedup similar recent messages)
@@ -1079,7 +1028,7 @@ class TacomaMonitor:
     def start_logging(self):
         if self.log_file:
             return
-        path = self.log_path or f"tacoma_obd_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        path = self.log_path or make_log_path(self.log_dir)
         self.log_path = path
         try:
             self.log_file = open(path, "w", newline="")
@@ -1089,6 +1038,7 @@ class TacomaMonitor:
             self.log_writer.writeheader()
             self.console.print(f"[green]CSV logging started (snapshot mode):[/green] {path}")
         except Exception as e:
+            log.exception("Failed to start CSV log %s", path)
             self.console.print(f"[red]Failed to start log:[/red] {e}")
             self.log_file = None
             self.log_writer = None
@@ -1100,7 +1050,7 @@ class TacomaMonitor:
                     self.log_file.flush()
                     self.log_file.close()
                 except Exception:
-                    pass
+                    log.exception("suppressed error")
             self.log_file = None
             self.log_writer = None
 
@@ -1119,10 +1069,12 @@ class TacomaMonitor:
                     try:
                         port = str(pn())
                     except Exception:
-                        pass
+                        log.exception("suppressed error")
                 elif isinstance(pn, str) and pn:
                     port = pn
-            status = f"LIVE · {port}"
+            status = f"LIVE · {port} · {self.conn_state}"
+            if self.reconnect_count:
+                status += f" (reconnects: {self.reconnect_count})"
             status_style = "bold green"
         title = Text.assemble(
             ("Toyota Tacoma ", "bold white"),
@@ -1229,7 +1181,7 @@ class TacomaMonitor:
             try:
                 self.analyze_and_flag()
             except Exception:
-                pass
+                log.exception("suppressed error")
             self._last_analyze_ts = now
         with self._lock:
             flags = list(self.flags)
@@ -1251,7 +1203,7 @@ class TacomaMonitor:
 
     def _build_footer(self) -> RenderableType:
         cmds = "b=baseline  l=toggle log  c=clear flags  q=quit  Ctrl-C also quits"
-        log_status = f"Logging: {'ON' if self.log_file else 'OFF'}"
+        log_status = f"Logging: {'ON' if self.log_file else 'OFF'}   |   Link: {self.conn_state}"
         return Text(f"{log_status}   |   {cmds}", style="dim")
 
     def get_renderable(self) -> RenderableType:
@@ -1277,6 +1229,7 @@ class TacomaMonitor:
                 footer,
             )
         except Exception as e:
+            log.exception("render error")
             return Panel(f"Dashboard render error: {e}", border_style="red")
 
     # ---------------- Input Handling (Linux-friendly) ----------------
@@ -1319,6 +1272,7 @@ class TacomaMonitor:
                         self._handle_input(line)
             except Exception:
                 # stdin issues (e.g. when piped) — just sleep
+                log.debug("stdin read failed", exc_info=True)
                 time.sleep(0.3)
 
     # ---------------- Main Run Loop ----------------
@@ -1334,6 +1288,10 @@ class TacomaMonitor:
             self.start_logging()
 
         self.start_watching()
+
+        if not self.demo:
+            self._watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True, name="obd-watchdog")
+            self._watchdog_thread.start()
 
         # Start input thread (best effort)
         self._input_thread = threading.Thread(target=self._input_loop, daemon=True)
@@ -1374,10 +1332,11 @@ class TacomaMonitor:
                         raise
                     except Exception as e:
                         # Never let a single bad frame kill the session
+                        log.exception("render loop hiccup")
                         try:
                             self.console.print(f"[dim]render hiccup: {e}[/dim]")
                         except Exception:
-                            pass
+                            log.exception("suppressed error")
                     time.sleep(0.25)
         except KeyboardInterrupt:
             pass
@@ -1385,7 +1344,7 @@ class TacomaMonitor:
             try:
                 self.console.print(f"[red]Live UI error:[/red] {e}")
             except Exception:
-                pass
+                log.exception("suppressed error")
         finally:
             self.stop()
         return 0
@@ -1449,23 +1408,32 @@ class TacomaMonitor:
 
     def stop(self):
         self.running = False
+        if getattr(self, "_stopped", False):
+            return
+        self._stopped = True
         if self.conn:
             try:
                 if hasattr(self.conn, "stop"):
                     self.conn.stop()
             except Exception:
-                pass
+                log.exception("suppressed error")
             try:
                 if hasattr(self.conn, "close"):
                     self.conn.close()
             except Exception:
-                pass
+                log.exception("suppressed error")
         self.stop_logging()
+        try:
+            n = cfgmod.cleanup_empty_logs(self.log_dir)
+            if n:
+                log.info("Removed %d empty/header-only CSV(s)", n)
+        except Exception:
+            log.exception("log cleanup failed")
         if self._live:
             try:
                 self._live.stop()
             except Exception:
-                pass
+                log.exception("suppressed error")
         try:
             self._print_session_summary()
         except Exception:
@@ -1509,6 +1477,8 @@ class TacomaMonitor:
 
         return {
             "demo": self.demo,
+            "conn_state": self.conn_state,
+            "reconnect_count": self.reconnect_count,
             "samples": self.samples,
             "elapsed": int(time.time() - self.session_start),
             "afr_last_v": self.o2_last_val,
@@ -1523,82 +1493,6 @@ class TacomaMonitor:
 
 
 # -----------------------------------------------------------------------------
-# Simple local web server (optional --web mode)
-# -----------------------------------------------------------------------------
-
-_HTML_PATH = Path(__file__).resolve().parent / "tacoma_dashboard.html"
-_monitor_ref: Optional[TacomaMonitor] = None
-
-
-class _DashboardHandler(BaseHTTPRequestHandler):
-    def log_message(self, format, *args):
-        # quieter than default
-        pass
-
-    def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Cache-Control", "no-store")
-
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self._cors()
-        self.end_headers()
-
-    def do_GET(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
-
-        if path in ("/", "/index.html", "/dashboard"):
-            if not _HTML_PATH.exists():
-                self.send_error(404, "tacoma_dashboard.html not found next to the script")
-                return
-            body = _HTML_PATH.read_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self._cors()
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        if path == "/api/data":
-            if _monitor_ref is None:
-                self.send_error(503, "Monitor not ready")
-                return
-            try:
-                payload = json.dumps(_monitor_ref.get_snapshot()).encode("utf-8")
-            except Exception as e:
-                self.send_error(500, str(e))
-                return
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(payload)))
-            self._cors()
-            self.end_headers()
-            self.wfile.write(payload)
-            return
-
-        self.send_error(404)
-
-
-def _start_web_server(monitor: TacomaMonitor, port: int = 8765):
-    global _monitor_ref
-    _monitor_ref = monitor
-    server = ThreadingHTTPServer(("127.0.0.1", port), _DashboardHandler)
-    t = threading.Thread(target=server.serve_forever, daemon=True)
-    t.start()
-    monitor.console.print(
-        f"[bold red]Web dashboard[/bold red] [yellow](TRD cluster)[/yellow]: "
-        f"[bold]http://127.0.0.1:{port}/[/bold]  ·  API /api/data"
-    )
-    monitor.console.print(
-        "[dim]Browser: S=save log  P=pause  B=baseline  ·  Autosave toggle in footer[/dim]"
-    )
-    return server
-
-
-# -----------------------------------------------------------------------------
 # Entry point
 # -----------------------------------------------------------------------------
 
@@ -1606,38 +1500,67 @@ def main():
     parser = argparse.ArgumentParser(
         description="Toyota Tacoma 2019 · 2TR-FE OBD-II live monitor + TRD web dashboard"
     )
+    parser.add_argument("--config", default=None,
+                        help="Path to config.json (default: config.json next to the script)")
     parser.add_argument("--port", "-p", default=None,
-                        help="Serial port (e.g. /dev/ttyUSB0). Omit for auto-detect.")
+                        help="Serial port (e.g. /dev/ttyUSB0). Overrides config serial_port. Omit for auto-detect.")
     parser.add_argument("--log", "-l", action="store_true",
-                        help="Start CSV logging immediately (file named with timestamp).")
+                        help="Start CSV logging immediately (file named with timestamp in log_dir).")
     parser.add_argument("--log-file", default=None,
                         help="Explicit path for CSV log instead of auto name.")
-    parser.add_argument("--interval", "-i", type=float, default=0.5,
-                        help="Approximate poll / display interval (seconds). Default 0.5")
+    parser.add_argument("--log-dir", default=None,
+                        help="Directory for CSV logs and errors.log (overrides config log_dir)")
+    parser.add_argument("--retention-days", type=float, default=None,
+                        help="Gzip CSVs older than this many days on startup (overrides config; 0=off)")
+    parser.add_argument("--interval", "-i", type=float, default=None,
+                        help="Approximate poll / display interval (seconds). Overrides config (default 0.5)")
     parser.add_argument("--demo", action="store_true",
                         help="Simulated 2TR-FE data — no adapter needed")
     parser.add_argument("--lite", action="store_true",
                         help="Watch CORE PIDs only (fewer queries; use if adapter stalls)")
     parser.add_argument("--web", action="store_true",
                         help="Start local TRD cluster web dashboard (browser gauges + CSV save)")
-    parser.add_argument("--web-port", type=int, default=8765,
-                        help="Port for the web dashboard (default 8765)")
+    parser.add_argument("--web-port", type=int, default=None,
+                        help="Port for the web dashboard (overrides config web_port, default 8765)")
     parser.add_argument("--no-color", action="store_true", help="Disable rich colors (rarely needed)")
     args = parser.parse_args()
+
+    cfg = cfgmod.load_config(args.config)
+    if args.port is not None:
+        cfg["serial_port"] = args.port
+    if args.web_port is not None:
+        cfg["web_port"] = args.web_port
+    if args.interval is not None:
+        cfg["poll_interval"] = args.interval
+    if args.log_dir is not None:
+        cfg["log_dir"] = args.log_dir
+    if args.retention_days is not None:
+        cfg["log_retention_days"] = args.retention_days
+
+    cfgmod.setup_error_logging(cfg["log_dir"])
+    log.info("Starting tacoma_monitor (demo=%s)", args.demo)
+    cfgmod.migrate_root_csvs(cfg["log_dir"])
+    try:
+        n = cfgmod.compress_old_logs(cfg["log_dir"], cfg.get("log_retention_days", 60))
+        if n:
+            log.info("Gzipped %d old CSV log(s)", n)
+    except Exception:
+        log.exception("log retention failed")
 
     if args.no_color:
         os.environ["NO_COLOR"] = "1"
 
     log_path = args.log_file
     if args.log and not log_path:
-        log_path = f"tacoma_obd_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        log_path = make_log_path(cfg["log_dir"])
 
     monitor = TacomaMonitor(
-        port=args.port,
+        port=cfg.get("serial_port"),
         log_path=log_path,
-        poll_interval=args.interval,
+        poll_interval=float(cfg["poll_interval"]),
         demo=args.demo,
         lite_pids=args.lite,
+        config=cfg,
     )
 
     # Ctrl-C: first try clean stop; second hit forces exit
@@ -1650,14 +1573,18 @@ def main():
         try:
             monitor.stop()
         except Exception:
-            pass
+            log.exception("stop() from signal failed")
         # Don't block forever if serial is wedged
         threading.Timer(2.0, lambda: os._exit(0)).start()
     signal.signal(signal.SIGINT, _sigint)
     signal.signal(signal.SIGTERM, _sigint)
 
     if args.web:
-        _start_web_server(monitor, port=args.web_port)
+        try:
+            start_web_server(monitor, port=int(cfg["web_port"]))
+        except Exception as e:
+            log.exception("web server failed to start")
+            monitor.console.print(f"[red]Web dashboard failed to start:[/red] {e}")
 
     sys.exit(monitor.run())
 

@@ -22,3 +22,8 @@ Backup*/
 .idea/
 *.swp
 .DS_Store
+
+# Refactor 2026-10
+logs/
+tacoma-obd-backups-*.tar.gz
+*.tar.gz

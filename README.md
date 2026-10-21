@@ -244,3 +244,25 @@ CRIT alerts stay **pinned** until you clear them so a brief spike isn’t lost m
 ---
 
 Drive safe, Bullet.
+
+## Configuration, logs and project layout (refactor 2026-10)
+
+**config.json** (next to the script) is optional — built-in defaults are used if it's missing. Command-line flags override it.
+
+| Key | Default | CLI override |
+|---|---|---|
+| `serial_port` | `null` (auto-detect) | `--port` |
+| `web_port` | `8765` | `--web-port` |
+| `poll_interval` | `0.5` | `--interval` |
+| `log_dir` | `"logs"` | `--log-dir` |
+| `log_retention_days` | `60` (0 = off) | `--retention-days` |
+| `reconnect.stale_seconds` / `backoff_initial` / `backoff_max` | `5` / `2` / `60` | — |
+| `thresholds.*` | coolant, trims, timing, voltage, fuel, AFR, catalyst, load… | — |
+
+Use `--config PATH` to load a different file.
+
+**logs/** (git-ignored): CSV drive logs (`tacoma_obd_YYYYMMDD_HHMMSS.csv`) and `errors.log` (rotating, 1 MB × 3). On startup old root-level CSVs are moved into `logs/` and CSVs older than `log_retention_days` are gzipped. On exit, empty and header-only CSVs are deleted.
+
+**Reconnect watchdog**: in live mode a background thread checks the adapter every second. If `conn.status()` isn't CAR_CONNECTED or no OBD response arrives for `stale_seconds`, it closes the connection and reconnects with exponential backoff (2, 4, 8 … 60 s), then re-registers the watches. CSV logging stays open. Link state appears in the header/footer and in `/api/data` (`conn_state`, `reconnect_count`).
+
+**Files**: `tacoma_monitor.py` (main/TUI), `config.py` (config, log paths, retention, error log), `web_dashboard.py` (`--web` HTTP server), `demo.py` (`--demo` simulator), `config.json`.
